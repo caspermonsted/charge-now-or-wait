@@ -1,0 +1,472 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Charge now?</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0e0f10;
+    --panel: #16181a;
+    --line: #24272a;
+    --ink: #f3f1ec;
+    --dim: #8a8f95;
+    --good: #7fd1a0;
+    --bad: #e8a87c;
+    --accent: #cfd3d8;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink); }
+  body {
+    font-family: "Fraunces", Georgia, serif;
+    min-height: 100dvh;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 5vh 1.25rem 3rem;
+    font-feature-settings: "ss01", "ss02";
+  }
+  main {
+    width: 100%;
+    max-width: 560px;
+  }
+  .eyebrow {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--dim);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2.5rem;
+  }
+  .eyebrow .zone {
+    background: transparent;
+    color: var(--dim);
+    border: 1px solid var(--line);
+    font: inherit;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    padding: 0.3rem 0.6rem;
+    border-radius: 999px;
+    cursor: pointer;
+  }
+  .eyebrow .zone:hover { color: var(--ink); border-color: var(--ink); }
+
+  .input-row {
+    display: flex;
+    align-items: baseline;
+    gap: 0.75rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 2.25rem;
+  }
+  .input-row label {
+    color: var(--dim);
+    font-size: 1rem;
+  }
+  .input-row input {
+    background: transparent;
+    border: none;
+    color: var(--ink);
+    font-family: "JetBrains Mono", monospace;
+    font-size: 2rem;
+    width: 4ch;
+    text-align: right;
+    outline: none;
+    padding: 0;
+    -moz-appearance: textfield;
+  }
+  .input-row input::-webkit-outer-spin-button,
+  .input-row input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  .input-row .pct {
+    font-family: "JetBrains Mono", monospace;
+    color: var(--dim);
+    font-size: 1.25rem;
+  }
+
+  .verdict {
+    font-size: clamp(2.6rem, 8vw, 4rem);
+    line-height: 1.02;
+    font-weight: 400;
+    letter-spacing: -0.02em;
+    margin: 0 0 1rem;
+  }
+  .verdict em {
+    font-style: italic;
+    font-weight: 300;
+  }
+  .verdict.good { color: var(--good); }
+  .verdict.bad  { color: var(--bad); }
+  .verdict.neutral { color: var(--accent); }
+
+  .detail {
+    color: var(--dim);
+    font-size: 1.05rem;
+    line-height: 1.55;
+    margin: 0 0 2.5rem;
+    max-width: 44ch;
+  }
+  .detail strong {
+    color: var(--ink);
+    font-weight: 400;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.95em;
+  }
+
+  .compare {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    overflow: hidden;
+    margin-bottom: 2.5rem;
+  }
+  .compare > div {
+    background: var(--panel);
+    padding: 1rem 1.1rem;
+  }
+  .compare h4 {
+    margin: 0 0 0.4rem;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.68rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--dim);
+    font-weight: 500;
+  }
+  .compare .price {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 1.5rem;
+    color: var(--ink);
+  }
+  .compare .price .unit {
+    font-size: 0.75rem;
+    color: var(--dim);
+    margin-left: 0.25rem;
+  }
+
+  .chart-wrap {
+    margin-top: 1rem;
+  }
+  .chart-label {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.68rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--dim);
+    margin-bottom: 0.75rem;
+  }
+  .chart {
+    display: grid;
+    grid-template-columns: repeat(24, 1fr);
+    align-items: end;
+    gap: 2px;
+    height: 90px;
+  }
+  .bar {
+    background: var(--line);
+    border-radius: 1px;
+    position: relative;
+    transition: background 0.15s;
+  }
+  .bar.now { background: var(--ink); }
+  .bar.target { background: var(--accent); }
+  .bar:hover { background: var(--dim); }
+  .bar.now:hover, .bar.target:hover { background: var(--ink); }
+  .hours {
+    display: grid;
+    grid-template-columns: repeat(24, 1fr);
+    gap: 2px;
+    margin-top: 0.4rem;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.6rem;
+    color: var(--dim);
+  }
+  .hours span { text-align: center; }
+  .hours span:not(:nth-child(6n+1)) { visibility: hidden; }
+
+  .legend {
+    display: flex;
+    gap: 1.25rem;
+    margin-top: 1rem;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.7rem;
+    color: var(--dim);
+  }
+  .legend .swatch {
+    display: inline-block;
+    width: 0.7rem;
+    height: 0.7rem;
+    margin-right: 0.4rem;
+    vertical-align: -1px;
+    border-radius: 1px;
+  }
+
+  .footer {
+    margin-top: 2.5rem;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--dim);
+    line-height: 1.6;
+  }
+  .footer a { color: var(--dim); }
+
+  .skeleton {
+    color: var(--dim);
+    font-style: italic;
+  }
+  .error {
+    color: var(--bad);
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.85rem;
+  }
+</style>
+</head>
+<body>
+<main>
+  <div class="eyebrow">
+    <span>Charge now <em style="font-style: italic; font-family: Fraunces; text-transform: lowercase; letter-spacing: 0;">or</em> wait until 02:00?</span>
+    <button class="zone" id="zoneBtn" title="Toggle price zone">DK2</button>
+  </div>
+
+  <div class="input-row">
+    <label for="soc">Current battery</label>
+    <input id="soc" type="number" min="0" max="79" value="40" inputmode="numeric" />
+    <span class="pct">%</span>
+  </div>
+
+  <h1 class="verdict skeleton" id="verdict">Loading prices…</h1>
+  <p class="detail" id="detail"></p>
+
+  <div class="compare">
+    <div>
+      <h4>Now</h4>
+      <div class="price"><span id="priceNow">—</span><span class="unit">kr/kWh</span></div>
+    </div>
+    <div>
+      <h4>02:00</h4>
+      <div class="price"><span id="priceTarget">—</span><span class="unit">kr/kWh</span></div>
+    </div>
+  </div>
+
+  <div class="chart-wrap">
+    <div class="chart-label" id="chartLabel">Today · DK2 · spot price, ex. VAT &amp; fees</div>
+    <div class="chart" id="chart"></div>
+    <div class="hours" id="hours"></div>
+    <div class="legend">
+      <span><span class="swatch" style="background: var(--ink)"></span>Now</span>
+      <span><span class="swatch" style="background: var(--accent)"></span>02:00</span>
+      <span><span class="swatch" style="background: var(--line)"></span>Other hours</span>
+    </div>
+  </div>
+
+  <div class="footer">
+    Tesla charge target assumed 80% · ~52 kWh battery · Sources: <a href="https://www.elprisenligenu.dk" target="_blank" rel="noopener">elprisenligenu.dk</a>, <a href="https://www.energidataservice.dk/tso-electricity/elspotprices" target="_blank" rel="noopener">Energi Data Service</a>
+  </div>
+</main>
+
+<script>
+  // ---- Config ----
+  // Tesla pack sizes vary; this is only for showing absolute savings in kr.
+  // The actual "charge now vs wait" decision is independent of pack size.
+  const PACK_KWH = 52;       // usable kWh, rough average across models
+  const TARGET_PCT = 80;     // your standard charge limit
+  const TARGET_HOUR = 2;     // 02:00 local time — when scheduled charging starts
+
+  let zone = localStorage.getItem('zone') || 'DK2';
+
+  const $ = (id) => document.getElementById(id);
+  const fmt = (n, d=2) => n.toLocaleString('da-DK', { minimumFractionDigits: d, maximumFractionDigits: d });
+
+  // ---- Fetch today's prices ----
+  // We try several sources in order. Browsers enforce CORS, and which APIs
+  // allow cross-origin requests changes over time, so a fallback chain is
+  // more robust than betting on one source. Each source is normalised to
+  // an array of 24 entries [{ DKK_per_kWh }] indexed by local Danish hour.
+  function ymd(date) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+
+  function normaliseHourly(records, hourField, priceField, divisor) {
+    const out = new Array(24).fill(null);
+    for (const r of records) {
+      const hour = parseInt(String(r[hourField]).slice(11, 13), 10);
+      if (hour >= 0 && hour < 24) {
+        out[hour] = { DKK_per_kWh: r[priceField] / divisor };
+      }
+    }
+    return out;
+  }
+
+  function isComplete(prices) {
+    return prices.every(p => p && typeof p.DKK_per_kWh === 'number' && !isNaN(p.DKK_per_kWh));
+  }
+
+  async function tryFetch(name, url, transform) {
+    console.log(`[charge-now] trying ${name}: ${url}`);
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`${name} returned HTTP ${res.status}`);
+    const data = await res.json();
+    const prices = transform(data);
+    if (!isComplete(prices)) throw new Error(`${name} returned incomplete data`);
+    console.log(`[charge-now] ${name} succeeded`);
+    return prices;
+  }
+
+  async function fetchPrices(date, z) {
+    const day = ymd(date);
+    const nextDay = ymd(new Date(date.getTime() + 24*60*60*1000));
+    const errors = [];
+
+    // Source A: elprisenligenu.dk — static JSON, simplest, but historically
+    // sometimes CORS-blocked depending on the user's browser/network.
+    try {
+      const yyyy = day.slice(0, 4);
+      const md = day.slice(5);
+      return await tryFetch(
+        'elprisenligenu.dk',
+        `https://www.elprisenligenu.dk/api/v1/prices/${yyyy}/${md}_${z}.json`,
+        (data) => data.map(r => ({ DKK_per_kWh: r.DKK_per_kWh }))
+      );
+    } catch (e) { errors.push(e.message); }
+
+    // Source B: Energi Data Service (Energinet). Filter must use array form.
+    try {
+      const filter = encodeURIComponent(JSON.stringify({ PriceArea: [z] }));
+      return await tryFetch(
+        'energidataservice.dk',
+        `https://api.energidataservice.dk/dataset/Elspotprices?start=${day}&end=${nextDay}&filter=${filter}&limit=24`,
+        (data) => normaliseHourly(data.records || [], 'HourDK', 'SpotPriceDKK', 1000)
+      );
+    } catch (e) { errors.push(e.message); }
+
+    // Source C: same Energinet API via corsproxy.io — last-ditch fallback
+    // if the user's browser is enforcing CORS on the direct call.
+    try {
+      const filter = encodeURIComponent(JSON.stringify({ PriceArea: [z] }));
+      const direct = `https://api.energidataservice.dk/dataset/Elspotprices?start=${day}&end=${nextDay}&filter=${filter}&limit=24`;
+      return await tryFetch(
+        'corsproxy.io',
+        `https://corsproxy.io/?${encodeURIComponent(direct)}`,
+        (data) => normaliseHourly(data.records || [], 'HourDK', 'SpotPriceDKK', 1000)
+      );
+    } catch (e) { errors.push(e.message); }
+
+    throw new Error('All sources failed:\n  · ' + errors.join('\n  · '));
+  }
+
+  // ---- Render ----
+  function renderChart(prices, nowHour, targetHour) {
+    const chart = $('chart');
+    const hours = $('hours');
+    chart.innerHTML = '';
+    hours.innerHTML = '';
+    const max = Math.max(...prices.map(p => p.DKK_per_kWh));
+    prices.forEach((p, i) => {
+      const bar = document.createElement('div');
+      bar.className = 'bar';
+      if (i === nowHour) bar.classList.add('now');
+      else if (i === targetHour) bar.classList.add('target');
+      const h = Math.max(2, (p.DKK_per_kWh / max) * 90);
+      bar.style.height = h + 'px';
+      bar.title = `${String(i).padStart(2, '0')}:00 — ${fmt(p.DKK_per_kWh, 2)} kr/kWh`;
+      chart.appendChild(bar);
+
+      const span = document.createElement('span');
+      span.textContent = String(i).padStart(2, '0');
+      hours.appendChild(span);
+    });
+  }
+
+  function decide(prices) {
+    const soc = Math.max(0, Math.min(79, parseInt($('soc').value, 10) || 0));
+    const now = new Date();
+    const nowHour = now.getHours();
+
+    // The "target" we'd otherwise charge at is 02:00 — but only if it's
+    // still in the future today. If it's past 02:00 already, we mean
+    // tomorrow's 02:00. Tomorrow's prices may not be published yet (they
+    // appear ~13:00 the day before), so we fall back to today's 02:00
+    // as a proxy when tomorrow isn't available. That's a known limitation
+    // and we surface it in the detail line.
+
+    const priceNow = prices[nowHour].DKK_per_kWh;
+    const priceTarget = prices[TARGET_HOUR].DKK_per_kWh;
+
+    const kwhNeeded = Math.max(0, (TARGET_PCT - soc) / 100 * PACK_KWH);
+    const costNow = kwhNeeded * priceNow;
+    const costTarget = kwhNeeded * priceTarget;
+    const saving = costTarget - costNow; // positive = save by charging now
+
+    $('priceNow').textContent = fmt(priceNow, 2);
+    $('priceTarget').textContent = fmt(priceTarget, 2);
+    $('chartLabel').textContent = `Today · ${zone} · spot price, ex. VAT & fees`;
+
+    const verdict = $('verdict');
+    const detail = $('detail');
+    verdict.classList.remove('skeleton', 'good', 'bad', 'neutral');
+
+    if (soc >= TARGET_PCT) {
+      verdict.textContent = `Already at ${TARGET_PCT}%.`;
+      verdict.classList.add('neutral');
+      detail.innerHTML = `Nothing to charge.`;
+    } else if (Math.abs(priceNow - priceTarget) < 0.01) {
+      verdict.innerHTML = `It's <em>a wash.</em>`;
+      verdict.classList.add('neutral');
+      detail.innerHTML = `Now and 02:00 cost about the same — <strong>${fmt(priceNow, 2)}</strong> vs <strong>${fmt(priceTarget, 2)}</strong> kr/kWh.`;
+    } else if (priceNow < priceTarget) {
+      verdict.innerHTML = `Yes — <em>charge now.</em>`;
+      verdict.classList.add('good');
+      detail.innerHTML = `Now is <strong>${fmt(priceNow, 2)}</strong> kr/kWh, vs <strong>${fmt(priceTarget, 2)}</strong> at 02:00. Charging ${soc}→${TARGET_PCT}% (~${fmt(kwhNeeded, 1)} kWh) saves <strong>${fmt(saving, 2)}</strong> kr.`;
+    } else {
+      verdict.innerHTML = `No — <em>wait.</em>`;
+      verdict.classList.add('bad');
+      detail.innerHTML = `02:00 is cheaper: <strong>${fmt(priceTarget, 2)}</strong> vs <strong>${fmt(priceNow, 2)}</strong> kr/kWh now. Waiting saves <strong>${fmt(-saving, 2)}</strong> kr on this charge.`;
+    }
+
+    renderChart(prices, nowHour, TARGET_HOUR);
+  }
+
+  let cachedPrices = null;
+
+  async function load() {
+    $('verdict').textContent = 'Loading prices…';
+    $('verdict').className = 'verdict skeleton';
+    try {
+      cachedPrices = await fetchPrices(new Date(), zone);
+      decide(cachedPrices);
+    } catch (e) {
+      $('verdict').className = 'verdict bad';
+      $('verdict').textContent = 'Could not load prices.';
+      const msg = String(e.message || e).replace(/\n/g, '<br>');
+      $('detail').innerHTML = `<span class="error">${msg}</span><br><br>Open the browser console (F12) for details.`;
+    }
+  }
+
+  $('soc').addEventListener('input', () => {
+    if (cachedPrices) decide(cachedPrices);
+  });
+  $('zoneBtn').addEventListener('click', () => {
+    zone = zone === 'DK2' ? 'DK1' : 'DK2';
+    try { localStorage.setItem('zone', zone); } catch (e) {}
+    $('zoneBtn').textContent = zone;
+    load();
+  });
+  $('zoneBtn').textContent = zone;
+
+  load();
+</script>
+</body>
+</html>
