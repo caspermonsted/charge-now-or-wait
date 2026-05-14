@@ -414,21 +414,23 @@
     });
   }
 
-  function decide(prices) {
+  function decide(prices, tomorrowPrices) {
     const soc = Math.max(0, Math.min(79, parseInt($('soc').value, 10) || 0));
     const now = new Date();
+    const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
     const nowHour = now.getHours();
 
-    // The "target" we'd otherwise charge at is 02:00 — but only if it's
-    // still in the future today. If it's past 02:00 already, we mean
-    // tomorrow's 02:00. Tomorrow's prices may not be published yet (they
-    // appear ~13:00 the day before), so we fall back to today's 02:00
-    // as a proxy when tomorrow isn't available. That's a known limitation
-    // and we surface it in the detail line.
+    // If it's already past TARGET_HOUR, the next 02:00 is tomorrow.
+    // Use tomorrow's prices when available; fall back to today's as a proxy
+    // and surface a note (tomorrow's prices publish ~13:00 the day before).
+    const targetIsTomorrow = nowHour >= TARGET_HOUR;
+    const usesTomorrowFallback = targetIsTomorrow && !tomorrowPrices;
+    const targetPriceData = (targetIsTomorrow && tomorrowPrices) ? tomorrowPrices : prices;
+    const targetDate = (targetIsTomorrow && tomorrowPrices) ? tomorrow : now;
 
     const totalPrices = prices.map((p, i) => totalKrKwh(p.DKK_per_kWh, i, now));
     const priceNow = totalPrices[nowHour];
-    const priceTarget = totalPrices[TARGET_HOUR];
+    const priceTarget = totalKrKwh(targetPriceData[TARGET_HOUR].DKK_per_kWh, TARGET_HOUR, targetDate);
 
     const kwhNeeded = Math.max(0, (TARGET_PCT - soc) / 100 * PACK_KWH);
     const costNow = kwhNeeded * priceNow;
@@ -443,6 +445,9 @@
     const detail = $('detail');
     verdict.classList.remove('skeleton', 'good', 'bad', 'neutral');
 
+    const targetLabel = targetIsTomorrow ? 'tomorrow 02:00' : '02:00';
+    const fallbackNote = usesTomorrowFallback ? ` <em style="font-size:0.85em">(tomorrow's prices not yet published — using today's as proxy)</em>` : '';
+
     if (soc >= TARGET_PCT) {
       verdict.textContent = `Already at ${TARGET_PCT}%.`;
       verdict.classList.add('neutral');
@@ -450,28 +455,36 @@
     } else if (Math.abs(priceNow - priceTarget) < 0.01) {
       verdict.innerHTML = `It's <em>a wash.</em>`;
       verdict.classList.add('neutral');
-      detail.innerHTML = `Now and 02:00 cost about the same — <strong>${fmt(priceNow, 2)}</strong> vs <strong>${fmt(priceTarget, 2)}</strong> kr/kWh.`;
+      detail.innerHTML = `Now and ${targetLabel} cost about the same — <strong>${fmt(priceNow, 2)}</strong> vs <strong>${fmt(priceTarget, 2)}</strong> kr/kWh.${fallbackNote}`;
     } else if (priceNow < priceTarget) {
       verdict.innerHTML = `Yes — <em>charge now.</em>`;
       verdict.classList.add('good');
-      detail.innerHTML = `Now is <strong>${fmt(priceNow, 2)}</strong> kr/kWh, vs <strong>${fmt(priceTarget, 2)}</strong> at 02:00. Charging ${soc}→${TARGET_PCT}% (~${fmt(kwhNeeded, 1)} kWh) saves <strong>${fmt(saving, 2)}</strong> kr.`;
+      detail.innerHTML = `Now is <strong>${fmt(priceNow, 2)}</strong> kr/kWh, vs <strong>${fmt(priceTarget, 2)}</strong> at ${targetLabel}. Charging ${soc}→${TARGET_PCT}% (~${fmt(kwhNeeded, 1)} kWh) saves <strong>${fmt(saving, 2)}</strong> kr.${fallbackNote}`;
     } else {
       verdict.innerHTML = `No — <em>wait.</em>`;
       verdict.classList.add('bad');
-      detail.innerHTML = `02:00 is cheaper: <strong>${fmt(priceTarget, 2)}</strong> vs <strong>${fmt(priceNow, 2)}</strong> kr/kWh now. Waiting saves <strong>${fmt(-saving, 2)}</strong> kr on this charge.`;
+      detail.innerHTML = `${targetLabel} is cheaper: <strong>${fmt(priceTarget, 2)}</strong> vs <strong>${fmt(priceNow, 2)}</strong> kr/kWh now. Waiting saves <strong>${fmt(-saving, 2)}</strong> kr on this charge.${fallbackNote}`;
     }
 
-    renderChart(totalPrices, nowHour, TARGET_HOUR);
+    // Chart shows today's prices; only highlight 02:00 bar if target is today
+    renderChart(totalPrices, nowHour, targetIsTomorrow ? -1 : TARGET_HOUR);
   }
 
   let cachedPrices = null;
+  let cachedTomorrowPrices = null;
 
   async function load() {
     $('verdict').textContent = 'Loading prices…';
     $('verdict').className = 'verdict skeleton';
     try {
-      cachedPrices = await fetchPrices(new Date(), zone);
-      decide(cachedPrices);
+      const today = new Date();
+      const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000);
+      cachedPrices = await fetchPrices(today, zone);
+      cachedTomorrowPrices = null;
+      if (today.getHours() >= TARGET_HOUR) {
+        try { cachedTomorrowPrices = await fetchPrices(tomorrow, zone); } catch (e) {}
+      }
+      decide(cachedPrices, cachedTomorrowPrices);
     } catch (e) {
       $('verdict').className = 'verdict bad';
       $('verdict').textContent = 'Could not load prices.';
@@ -481,7 +494,7 @@
   }
 
   $('soc').addEventListener('input', () => {
-    if (cachedPrices) decide(cachedPrices);
+    if (cachedPrices) decide(cachedPrices, cachedTomorrowPrices);
   });
   $('zoneBtn').addEventListener('click', () => {
     zone = zone === 'DK2' ? 'DK1' : 'DK2';
