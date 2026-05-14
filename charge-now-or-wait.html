@@ -254,11 +254,11 @@
   <div class="compare">
     <div>
       <h4>Now</h4>
-      <div class="price"><span id="priceNow">—</span><span class="unit">kr/kWh avg.</span></div>
+      <div class="price"><span id="priceNow">—</span><span class="unit">kr</span></div>
     </div>
     <div>
       <h4>02:00</h4>
-      <div class="price"><span id="priceTarget">—</span><span class="unit">kr/kWh avg.</span></div>
+      <div class="price"><span id="priceTarget">—</span><span class="unit">kr</span></div>
     </div>
   </div>
 
@@ -480,12 +480,8 @@
     const costTarget = kwhNeeded > 0 ? chargingCost(TARGET_HOUR, kwhNeeded, targetPriceData, targetDate) : 0;
     const saving = costTarget - costNow; // positive = save by charging now
 
-    // Effective average kr/kWh over the full session (what the compare panel shows)
-    const effectiveNow    = kwhNeeded > 0 ? costNow    / kwhNeeded : totalPrices[nowHour];
-    const effectiveTarget = kwhNeeded > 0 ? costTarget / kwhNeeded : totalKrKwh(targetPriceData[TARGET_HOUR].DKK_per_kWh, TARGET_HOUR, targetDate);
-
-    $('priceNow').textContent = fmt(effectiveNow, 2);
-    $('priceTarget').textContent = fmt(effectiveTarget, 2);
+    $('priceNow').textContent = fmt(costNow, 2);
+    $('priceTarget').textContent = fmt(costTarget, 2);
 
     const verdict = $('verdict');
     const detail = $('detail');
@@ -498,18 +494,18 @@
       verdict.textContent = `Already at ${TARGET_PCT}%.`;
       verdict.classList.add('neutral');
       detail.innerHTML = `Nothing to charge.`;
-    } else if (Math.abs(effectiveNow - effectiveTarget) < 0.01) {
+    } else if (Math.abs(costNow - costTarget) < 0.50) {
       verdict.innerHTML = `It's <em>a wash.</em>`;
       verdict.classList.add('neutral');
-      detail.innerHTML = `Now and ${targetLabel} cost about the same — <strong>${fmt(effectiveNow, 2)}</strong> vs <strong>${fmt(effectiveTarget, 2)}</strong> kr/kWh avg.${fallbackNote}`;
+      detail.innerHTML = `Both options cost about the same.${fallbackNote}`;
     } else if (costNow < costTarget) {
       verdict.innerHTML = `Yes — <em>charge now.</em>`;
       verdict.classList.add('good');
-      detail.innerHTML = `Now is <strong>${fmt(effectiveNow, 2)}</strong> kr/kWh avg., vs <strong>${fmt(effectiveTarget, 2)}</strong> at ${targetLabel}. Charging ${soc}→${TARGET_PCT}% (~${fmt(kwhNeeded, 1)} kWh) saves <strong>${fmt(saving, 2)}</strong> kr.${fallbackNote}`;
+      detail.innerHTML = `Saves <strong>${fmt(saving, 2)} kr</strong> over waiting until ${targetLabel}.${fallbackNote}`;
     } else {
       verdict.innerHTML = `No — <em>wait.</em>`;
       verdict.classList.add('bad');
-      detail.innerHTML = `${targetLabel} is cheaper: <strong>${fmt(effectiveTarget, 2)}</strong> vs <strong>${fmt(effectiveNow, 2)}</strong> kr/kWh avg. now. Waiting saves <strong>${fmt(-saving, 2)}</strong> kr on this charge.${fallbackNote}`;
+      detail.innerHTML = `Waiting saves <strong>${fmt(-saving, 2)} kr</strong> on this charge.${fallbackNote}`;
     }
 
     // Append tomorrow 02–06 slice when prices are available
