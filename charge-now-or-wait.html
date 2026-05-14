@@ -250,11 +250,11 @@
   <div class="compare">
     <div>
       <h4>Now</h4>
-      <div class="price"><span id="priceNow">—</span><span class="unit">kr/kWh inkl.</span></div>
+      <div class="price"><span id="priceNow">—</span><span class="unit">kr/kWh avg.</span></div>
     </div>
     <div>
       <h4>02:00</h4>
-      <div class="price"><span id="priceTarget">—</span><span class="unit">kr/kWh inkl.</span></div>
+      <div class="price"><span id="priceTarget">—</span><span class="unit">kr/kWh avg.</span></div>
     </div>
   </div>
 
@@ -281,6 +281,7 @@
   const PACK_KWH = 52;       // usable kWh, rough average across models
   const TARGET_PCT = 80;     // your standard charge limit
   const TARGET_HOUR = 2;     // 02:00 local time — when scheduled charging starts
+  const CHARGE_KW = 7.4;     // typical Tesla Wall Connector home charging rate
 
   // ---- Radius Elnet nettarif C (øre/kWh excl. VAT) ----
   // Summer = 1 Apr–30 Sep, Winter = 1 Oct–31 Mar
@@ -304,6 +305,19 @@
   // Total consumer price in kr/kWh incl. 25% VAT
   function totalKrKwh(spotDKK, hour, date) {
     return (spotDKK + (nettarifOere(hour, date) + FIXED_OEREKWH) / 100) * 1.25;
+  }
+
+  // Actual cost of a charging session starting at startHour, summed hour by hour.
+  // Handles tariff boundary crossings (e.g. starting at 16:00 and running into peak at 17:00).
+  function chargingCost(startHour, kwhNeeded, spotPrices, date) {
+    let remaining = kwhNeeded;
+    let cost = 0;
+    for (let i = 0; remaining > 0; i++) {
+      const h = (startHour + i) % 24;
+      cost += Math.min(remaining, CHARGE_KW) * totalKrKwh(spotPrices[h].DKK_per_kWh, h, date);
+      remaining -= CHARGE_KW;
+    }
+    return cost;
   }
 
   let zone = localStorage.getItem('zone') || 'DK2';
@@ -405,7 +419,7 @@
       else if (i === targetHour) bar.classList.add('target');
       const h = Math.max(2, (total / max) * 90);
       bar.style.height = h + 'px';
-      bar.title = `${String(i).padStart(2, '0')}:00 — ${fmt(total, 2)} kr/kWh inkl. moms`;
+      bar.title = `${String(i).padStart(2, '0')}:00 — ${fmt(total, 2)} kr/kWh avg. moms`;
       chart.appendChild(bar);
 
       const span = document.createElement('span');
@@ -429,16 +443,18 @@
     const targetDate = (targetIsTomorrow && tomorrowPrices) ? tomorrow : now;
 
     const totalPrices = prices.map((p, i) => totalKrKwh(p.DKK_per_kWh, i, now));
-    const priceNow = totalPrices[nowHour];
-    const priceTarget = totalKrKwh(targetPriceData[TARGET_HOUR].DKK_per_kWh, TARGET_HOUR, targetDate);
 
     const kwhNeeded = Math.max(0, (TARGET_PCT - soc) / 100 * PACK_KWH);
-    const costNow = kwhNeeded * priceNow;
-    const costTarget = kwhNeeded * priceTarget;
+    const costNow    = kwhNeeded > 0 ? chargingCost(nowHour,     kwhNeeded, prices,          now)        : 0;
+    const costTarget = kwhNeeded > 0 ? chargingCost(TARGET_HOUR, kwhNeeded, targetPriceData, targetDate) : 0;
     const saving = costTarget - costNow; // positive = save by charging now
 
-    $('priceNow').textContent = fmt(priceNow, 2);
-    $('priceTarget').textContent = fmt(priceTarget, 2);
+    // Effective average kr/kWh over the full session (what the compare panel shows)
+    const effectiveNow    = kwhNeeded > 0 ? costNow    / kwhNeeded : totalPrices[nowHour];
+    const effectiveTarget = kwhNeeded > 0 ? costTarget / kwhNeeded : totalKrKwh(targetPriceData[TARGET_HOUR].DKK_per_kWh, TARGET_HOUR, targetDate);
+
+    $('priceNow').textContent = fmt(effectiveNow, 2);
+    $('priceTarget').textContent = fmt(effectiveTarget, 2);
     $('chartLabel').textContent = `Today · ${zone} · total inkl. nettarif, afgifter & moms`;
 
     const verdict = $('verdict');
@@ -452,18 +468,18 @@
       verdict.textContent = `Already at ${TARGET_PCT}%.`;
       verdict.classList.add('neutral');
       detail.innerHTML = `Nothing to charge.`;
-    } else if (Math.abs(priceNow - priceTarget) < 0.01) {
+    } else if (Math.abs(effectiveNow - effectiveTarget) < 0.01) {
       verdict.innerHTML = `It's <em>a wash.</em>`;
       verdict.classList.add('neutral');
-      detail.innerHTML = `Now and ${targetLabel} cost about the same — <strong>${fmt(priceNow, 2)}</strong> vs <strong>${fmt(priceTarget, 2)}</strong> kr/kWh.${fallbackNote}`;
-    } else if (priceNow < priceTarget) {
+      detail.innerHTML = `Now and ${targetLabel} cost about the same — <strong>${fmt(effectiveNow, 2)}</strong> vs <strong>${fmt(effectiveTarget, 2)}</strong> kr/kWh avg.${fallbackNote}`;
+    } else if (costNow < costTarget) {
       verdict.innerHTML = `Yes — <em>charge now.</em>`;
       verdict.classList.add('good');
-      detail.innerHTML = `Now is <strong>${fmt(priceNow, 2)}</strong> kr/kWh, vs <strong>${fmt(priceTarget, 2)}</strong> at ${targetLabel}. Charging ${soc}→${TARGET_PCT}% (~${fmt(kwhNeeded, 1)} kWh) saves <strong>${fmt(saving, 2)}</strong> kr.${fallbackNote}`;
+      detail.innerHTML = `Now is <strong>${fmt(effectiveNow, 2)}</strong> kr/kWh avg., vs <strong>${fmt(effectiveTarget, 2)}</strong> at ${targetLabel}. Charging ${soc}→${TARGET_PCT}% (~${fmt(kwhNeeded, 1)} kWh) saves <strong>${fmt(saving, 2)}</strong> kr.${fallbackNote}`;
     } else {
       verdict.innerHTML = `No — <em>wait.</em>`;
       verdict.classList.add('bad');
-      detail.innerHTML = `${targetLabel} is cheaper: <strong>${fmt(priceTarget, 2)}</strong> vs <strong>${fmt(priceNow, 2)}</strong> kr/kWh now. Waiting saves <strong>${fmt(-saving, 2)}</strong> kr on this charge.${fallbackNote}`;
+      detail.innerHTML = `${targetLabel} is cheaper: <strong>${fmt(effectiveTarget, 2)}</strong> vs <strong>${fmt(effectiveNow, 2)}</strong> kr/kWh avg. now. Waiting saves <strong>${fmt(-saving, 2)}</strong> kr on this charge.${fallbackNote}`;
     }
 
     // Chart shows today's prices; only highlight 02:00 bar if target is today
