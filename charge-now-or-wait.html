@@ -164,13 +164,14 @@
     margin-bottom: 0.75rem;
   }
   .chart {
-    display: grid;
-    grid-template-columns: repeat(24, 1fr);
-    align-items: end;
+    display: flex;
+    align-items: flex-end;
     gap: 2px;
     height: 90px;
   }
   .bar {
+    flex: 1;
+    min-width: 0;
     background: var(--line);
     border-radius: 1px;
     position: relative;
@@ -180,17 +181,20 @@
   .bar.target { background: var(--accent); }
   .bar:hover { background: var(--dim); }
   .bar.now:hover, .bar.target:hover { background: var(--ink); }
+  .day-sep {
+    flex-shrink: 0;
+    width: 6px;
+  }
   .hours {
-    display: grid;
-    grid-template-columns: repeat(24, 1fr);
+    display: flex;
     gap: 2px;
     margin-top: 0.4rem;
     font-family: "JetBrains Mono", monospace;
     font-size: 0.6rem;
     color: var(--dim);
   }
-  .hours span { text-align: center; }
-  .hours span:not(:nth-child(6n+1)) { visibility: hidden; }
+  .hours span { flex: 1; min-width: 0; text-align: center; }
+  .hours .day-sep { width: 6px; flex-shrink: 0; }
 
   .legend {
     display: flex;
@@ -406,26 +410,53 @@
   }
 
   // ---- Render ----
-  function renderChart(totalPrices, nowHour, targetHour) {
+  function renderChart(totalPrices, nowHour, targetHour, tomorrowSlice) {
     const chart = $('chart');
-    const hours = $('hours');
+    const hoursEl = $('hours');
     chart.innerHTML = '';
-    hours.innerHTML = '';
-    const max = Math.max(...totalPrices);
-    totalPrices.forEach((total, i) => {
-      const bar = document.createElement('div');
-      bar.className = 'bar';
-      if (i === nowHour) bar.classList.add('now');
-      else if (i === targetHour) bar.classList.add('target');
-      const h = Math.max(2, (total / max) * 90);
-      bar.style.height = h + 'px';
-      bar.title = `${String(i).padStart(2, '0')}:00 — ${fmt(total, 2)} kr/kWh avg. moms`;
-      chart.appendChild(bar);
+    hoursEl.innerHTML = '';
 
+    const allValues = tomorrowSlice
+      ? [...totalPrices, ...tomorrowSlice.map(t => t.total)]
+      : totalPrices;
+    const max = Math.max(...allValues);
+
+    function makeBar(total, isNow, isTarget, label) {
+      const bar = document.createElement('div');
+      bar.className = 'bar' + (isNow ? ' now' : isTarget ? ' target' : '');
+      bar.style.height = Math.max(2, (total / max) * 90) + 'px';
+      bar.title = label;
+      return bar;
+    }
+
+    // Today's 24 bars
+    totalPrices.forEach((total, i) => {
+      chart.appendChild(makeBar(total, i === nowHour, i === targetHour,
+        `${String(i).padStart(2,'0')}:00 — ${fmt(total, 2)} kr/kWh`));
       const span = document.createElement('span');
       span.textContent = String(i).padStart(2, '0');
-      hours.appendChild(span);
+      span.style.visibility = (i % 6 === 0) ? 'visible' : 'hidden';
+      hoursEl.appendChild(span);
     });
+
+    if (tomorrowSlice && tomorrowSlice.length > 0) {
+      // Separator between today and tomorrow
+      const sepBar = document.createElement('div');
+      sepBar.className = 'day-sep';
+      chart.appendChild(sepBar);
+      const sepLabel = document.createElement('div');
+      sepLabel.className = 'day-sep';
+      hoursEl.appendChild(sepLabel);
+
+      // Tomorrow's bars
+      tomorrowSlice.forEach(({ hour, total }) => {
+        chart.appendChild(makeBar(total, false, hour === TARGET_HOUR,
+          `Tomorrow ${String(hour).padStart(2,'0')}:00 — ${fmt(total, 2)} kr/kWh`));
+        const span = document.createElement('span');
+        span.textContent = String(hour).padStart(2, '0');
+        hoursEl.appendChild(span);
+      });
+    }
   }
 
   function decide(prices, tomorrowPrices) {
@@ -455,7 +486,6 @@
 
     $('priceNow').textContent = fmt(effectiveNow, 2);
     $('priceTarget').textContent = fmt(effectiveTarget, 2);
-    $('chartLabel').textContent = `Today · ${zone} · total inkl. nettarif, afgifter & moms`;
 
     const verdict = $('verdict');
     const detail = $('detail');
@@ -482,8 +512,19 @@
       detail.innerHTML = `${targetLabel} is cheaper: <strong>${fmt(effectiveTarget, 2)}</strong> vs <strong>${fmt(effectiveNow, 2)}</strong> kr/kWh avg. now. Waiting saves <strong>${fmt(-saving, 2)}</strong> kr on this charge.${fallbackNote}`;
     }
 
-    // Chart shows today's prices; only highlight 02:00 bar if target is today
-    renderChart(totalPrices, nowHour, targetIsTomorrow ? -1 : TARGET_HOUR);
+    // Append tomorrow 02–06 slice when prices are available
+    const tomorrowSlice = (tomorrowPrices)
+      ? [2, 3, 4, 5, 6].map(h => ({
+          hour: h,
+          total: totalKrKwh(tomorrowPrices[h].DKK_per_kWh, h, tomorrow),
+        }))
+      : null;
+
+    $('chartLabel').textContent = tomorrowSlice
+      ? `Today + tomorrow 02–06 · ${zone} · inkl. nettarif & moms`
+      : `Today · ${zone} · inkl. nettarif, afgifter & moms`;
+
+    renderChart(totalPrices, nowHour, targetIsTomorrow ? -1 : TARGET_HOUR, tomorrowSlice);
   }
 
   let cachedPrices = null;
