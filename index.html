@@ -508,11 +508,13 @@
       detail.innerHTML = `Waiting saves <strong>${fmt(-saving, 2)} kr</strong> on this charge.${fallbackNote}`;
     }
 
-    // Append tomorrow 02–06 slice when prices are available
-    const tomorrowSlice = (tomorrowPrices)
+    // Always show tomorrow 02–06 when target is tomorrow; use today as proxy if not yet published
+    const sliceSrc  = tomorrowPrices || prices;
+    const sliceDate = tomorrowPrices ? tomorrow : now;
+    const tomorrowSlice = targetIsTomorrow
       ? [2, 3, 4, 5, 6].map(h => ({
           hour: h,
-          total: totalKrKwh(tomorrowPrices[h].DKK_per_kWh, h, tomorrow),
+          total: totalKrKwh(sliceSrc[h].DKK_per_kWh, h, sliceDate),
         }))
       : null;
 
