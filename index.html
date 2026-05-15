@@ -179,6 +179,8 @@
   }
   .bar.now { background: var(--ink); }
   .bar.target { background: var(--accent); }
+  .bar.now-session { background: rgba(243, 241, 236, 0.22); }
+  .bar.target-session { background: rgba(207, 211, 216, 0.18); }
   .bar:hover { background: var(--dim); }
   .bar.now:hover, .bar.target:hover { background: var(--ink); }
   .day-sep {
@@ -410,7 +412,7 @@
   }
 
   // ---- Render ----
-  function renderChart(totalPrices, nowHour, targetHour, tomorrowSlice) {
+  function renderChart(totalPrices, nowHour, targetHour, tomorrowSlice, nowSessionSet, targetSessionSet, targetOnTomorrow) {
     const chart = $('chart');
     const hoursEl = $('hours');
     chart.innerHTML = '';
@@ -421,9 +423,11 @@
       : totalPrices;
     const max = Math.max(...allValues);
 
-    function makeBar(total, isNow, isTarget, label) {
+    function makeBar(total, isNow, isTarget, inNowSession, inTargetSession, label) {
       const bar = document.createElement('div');
-      bar.className = 'bar' + (isNow ? ' now' : isTarget ? ' target' : '');
+      const cls = isNow ? 'now' : isTarget ? 'target'
+                : inNowSession ? 'now-session' : inTargetSession ? 'target-session' : '';
+      bar.className = 'bar' + (cls ? ' ' + cls : '');
       bar.style.height = Math.max(2, (total / max) * 90) + 'px';
       bar.title = label;
       return bar;
@@ -431,8 +435,14 @@
 
     // Today's 24 bars
     totalPrices.forEach((total, i) => {
-      chart.appendChild(makeBar(total, i === nowHour, i === targetHour,
-        `${String(i).padStart(2,'0')}:00 — ${fmt(total, 2)} kr/kWh`));
+      chart.appendChild(makeBar(
+        total,
+        i === nowHour,
+        !targetOnTomorrow && i === targetHour,
+        nowSessionSet.has(i) && i !== nowHour,
+        !targetOnTomorrow && targetSessionSet.has(i) && i !== targetHour,
+        `${String(i).padStart(2,'0')}:00 — ${fmt(total, 2)} kr/kWh`
+      ));
       const span = document.createElement('span');
       span.textContent = String(i).padStart(2, '0');
       span.style.visibility = (i % 6 === 0) ? 'visible' : 'hidden';
@@ -440,7 +450,6 @@
     });
 
     if (tomorrowSlice && tomorrowSlice.length > 0) {
-      // Separator between today and tomorrow
       const sepBar = document.createElement('div');
       sepBar.className = 'day-sep';
       chart.appendChild(sepBar);
@@ -448,10 +457,15 @@
       sepLabel.className = 'day-sep';
       hoursEl.appendChild(sepLabel);
 
-      // Tomorrow's bars
       tomorrowSlice.forEach(({ hour, total }) => {
-        chart.appendChild(makeBar(total, false, hour === TARGET_HOUR,
-          `Tomorrow ${String(hour).padStart(2,'0')}:00 — ${fmt(total, 2)} kr/kWh`));
+        chart.appendChild(makeBar(
+          total,
+          false,
+          hour === TARGET_HOUR,
+          false,
+          targetOnTomorrow && targetSessionSet.has(hour) && hour !== TARGET_HOUR,
+          `Tomorrow ${String(hour).padStart(2,'0')}:00 — ${fmt(total, 2)} kr/kWh`
+        ));
         const span = document.createElement('span');
         span.textContent = String(hour).padStart(2, '0');
         hoursEl.appendChild(span);
@@ -522,7 +536,11 @@
       ? `Today + tomorrow 02–06 · ${zone} · inkl. nettarif & moms`
       : `Today · ${zone} · inkl. nettarif, afgifter & moms`;
 
-    renderChart(totalPrices, nowHour, targetIsTomorrow ? -1 : TARGET_HOUR, tomorrowSlice);
+    const sessionLen = kwhNeeded > 0 ? Math.ceil(kwhNeeded / CHARGE_KW) : 0;
+    const nowSessionSet    = new Set(Array.from({length: sessionLen}, (_, i) => (nowHour     + i) % 24));
+    const targetSessionSet = new Set(Array.from({length: sessionLen}, (_, i) => (TARGET_HOUR + i) % 24));
+
+    renderChart(totalPrices, nowHour, targetIsTomorrow ? -1 : TARGET_HOUR, tomorrowSlice, nowSessionSet, targetSessionSet, targetIsTomorrow);
   }
 
   let cachedPrices = null;
